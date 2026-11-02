@@ -1,4 +1,4 @@
-﻿# Entorno virtual
+# Entorno virtual
 .venv/
 venv/
 
@@ -13,8 +13,12 @@ __pycache__/
 # Archivos de los artículos científicos originales
 data/articulos/
 
-# Modelos preentrenados (grandes y sujetos a sus propias licencias)
-data/models/
+# Modelos preentrenados grandes (excluidos por peso > 70MB - 1GB)
+data/models/*.vec
+data/models/*.bin
+data/models/glove-wiki-gigaword-50*
+data/models/fasttext-wiki-news-subwords-300*
+!data/models/*_corpus.txt.gz
 
 # Texto extraído de los artículos
 texto_articulo.txt

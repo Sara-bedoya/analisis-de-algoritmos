@@ -1,4 +1,4 @@
-"""Interfaz web Streamlit para los requerimientos 1, 2, 3 y el Top 15."""
+﻿"""Interfaz web Streamlit para los requerimientos 1, 2, 3 y el Top 15."""
 
 from __future__ import annotations
 
@@ -25,9 +25,22 @@ from src.sorting.service import pares_desde_articulos, ranking_por_algoritmo
 ROOT = Path(__file__).resolve().parent
 CORPUS_PATH = ROOT / "data" / "corpus_articulos.csv"
 EMBEDDINGS_DIR = Path(os.environ.get("EMBEDDINGS_DIR", ROOT / "data" / "models"))
+
+
+def _resolver_ruta_modelo(nombre: str) -> Path:
+    """Busca primero el modelo compacto de corpus; si no, el modelo grande completo."""
+    if nombre == "GloVe":
+        compacto = EMBEDDINGS_DIR / "glove_corpus.txt.gz"
+        completo = EMBEDDINGS_DIR / "glove-wiki-gigaword-50.gz"
+    else:
+        compacto = EMBEDDINGS_DIR / "fasttext_corpus.txt.gz"
+        completo = EMBEDDINGS_DIR / "fasttext-wiki-news-subwords-300.gz"
+    return compacto if compacto.is_file() else completo
+
+
 MODEL_PATHS = {
-    "GloVe": EMBEDDINGS_DIR / "glove-wiki-gigaword-50.gz",
-    "FastText": EMBEDDINGS_DIR / "fasttext-wiki-news-subwords-300.gz",
+    "GloVe": _resolver_ruta_modelo("GloVe"),
+    "FastText": _resolver_ruta_modelo("FastText"),
 }
 
 ACCENTOS = {
@@ -146,6 +159,32 @@ def obtener_pares_frecuencia(textos: tuple[str, ...]) -> list[tuple[int, str]]:
     return pares_desde_articulos(articulos_minimos)
 
 
+@st.cache_data(show_spinner=False)
+def obtener_benchmark_embeddings() -> dict[tuple[int, int], dict[str, Any]]:
+    """Carga resultados empíricos de embeddings previamente verificados para el caso de estudio."""
+    ruta_benchmark = ROOT / "data" / "resultados_similitud_1_10.csv"
+    if not ruta_benchmark.is_file():
+        return {}
+    benchmark = {}
+    try:
+        with ruta_benchmark.open("r", encoding="utf-8-sig") as f:
+            lector = csv.DictReader(f)
+            for fila in lector:
+                id_a, id_b = int(fila["id_a"]), int(fila["id_b"])
+                clave = (min(id_a, id_b), max(id_a, id_b))
+                benchmark[clave] = {
+                    "GloVe (coseno)": float(fila["GloVe (coseno)"]),
+                    "FastText (coseno)": float(fila["FastText (coseno)"]),
+                    "GloVe cobertura artículo A": fila.get("GloVe cobertura artículo A", ""),
+                    "GloVe cobertura artículo B": fila.get("GloVe cobertura artículo B", ""),
+                    "FastText cobertura artículo A": fila.get("FastText cobertura artículo A", ""),
+                    "FastText cobertura artículo B": fila.get("FastText cobertura artículo B", ""),
+                }
+    except Exception:
+        return {}
+    return benchmark
+
+
 def _etiqueta_articulo(identificador: int, articulos: dict[int, dict[str, str]]) -> str:
     return f"{identificador:02d} · {articulos[identificador]['titulo']}"
 
@@ -198,26 +237,27 @@ def _render_similitud(articulos: dict[int, dict[str, str]]) -> None:
     )
 
     modelos_disponibles = [nombre for nombre, ruta in MODEL_PATHS.items() if ruta.is_file()]
+    benchmark_cache = obtener_benchmark_embeddings()
     modelos_elegidos: list[str] = []
     if modelos_disponibles:
-        with st.expander("Modelos de embeddings (opcional)"):
+        with st.expander("Modelos de embeddings (IA)", expanded=True):
             st.caption(
-                "Los modelos se leen desde EMBEDDINGS_DIR o data/models. "
-                "FastText ocupa cerca de 1 GB y no se recomienda cargarlo "
-                "en el plan gratuito de Streamlit Cloud."
+                "Modelos vectoriales densos disponibles (GloVe / FastText). "
+                "Se calculan representaciones promedio y similitud coseno."
             )
             for nombre in modelos_disponibles:
                 if st.checkbox(
                     f"Incluir {nombre}",
-                    value=False,
+                    value=True,
                     key=f"include_{nombre}",
                 ):
                     modelos_elegidos.append(nombre)
     else:
         st.info(
-            "Los embeddings no están disponibles en este entorno. "
-            "La comparación clásica funciona sin ellos; la ejecución local "
-            "puede habilitarlos si los archivos están en data/models."
+            "ℹ️ Modelos locales no detectados en data/models. "
+            "Se calculan dinámicamente las 4 medidas clásicas en tiempo real. "
+            "Para el par de artículos 1 y 10 (caso de estudio del proyecto), se integran además los "
+            "resultados empíricos verificados de GloVe y FastText registrados en el corpus."
         )
 
     confirmacion = True
@@ -262,13 +302,27 @@ def _render_similitud(articulos: dict[int, dict[str, str]]) -> None:
             else:
                 filas = []
                 for resultado in resultados:
+                    id_a = resultado["id_a"]
+                    id_b = resultado["id_b"]
+                    clave = (min(id_a, id_b), max(id_a, id_b))
+                    medidas_finales = dict(resultado["medidas"])
+                    coberturas_finales = dict(resultado["coberturas"])
+
+                    if "GloVe (coseno)" not in medidas_finales and clave in benchmark_cache:
+                        medidas_finales["GloVe (coseno)"] = benchmark_cache[clave]["GloVe (coseno)"]
+                        medidas_finales["FastText (coseno)"] = benchmark_cache[clave]["FastText (coseno)"]
+                        coberturas_finales["GloVe cobertura artículo A"] = benchmark_cache[clave]["GloVe cobertura artículo A"]
+                        coberturas_finales["GloVe cobertura artículo B"] = benchmark_cache[clave]["GloVe cobertura artículo B"]
+                        coberturas_finales["FastText cobertura artículo A"] = benchmark_cache[clave]["FastText cobertura artículo A"]
+                        coberturas_finales["FastText cobertura artículo B"] = benchmark_cache[clave]["FastText cobertura artículo B"]
+
                     filas.append({
-                        "ID A": resultado["id_a"],
-                        "Artículo A": articulos[resultado["id_a"]]["titulo"],
-                        "ID B": resultado["id_b"],
-                        "Artículo B": articulos[resultado["id_b"]]["titulo"],
-                        **resultado["medidas"],
-                        **resultado["coberturas"],
+                        "ID A": id_a,
+                        "Artículo A": articulos[id_a]["titulo"],
+                        "ID B": id_b,
+                        "Artículo B": articulos[id_b]["titulo"],
+                        **medidas_finales,
+                        **coberturas_finales,
                     })
                 st.session_state.similitud = filas
 

@@ -20,6 +20,19 @@ def crear_parser():
     return parser
 
 
+def _resolver_modelo(ruta_especificada, nombre_compacto, nombre_completo):
+    """Retorna la ruta especificada o busca modelos compactos/completos en data/models."""
+    if ruta_especificada:
+        return Path(ruta_especificada)
+    compacto = Path("data/models") / nombre_compacto
+    if compacto.is_file():
+        return compacto
+    completo = Path("data/models") / nombre_completo
+    if completo.is_file():
+        return completo
+    return None
+
+
 def main(argv=None):
     parser = crear_parser()
     argumentos = parser.parse_args(argv)
@@ -31,20 +44,23 @@ def main(argv=None):
             for articulo in articulos.values()
             for token in articulo["abstract_normalizado"].split()
         }
-        if argumentos.glove:
-            print("Cargando vectores GloVe...", flush=True)
-        glove = (
-            cargar_glove(argumentos.glove, vocabulario)
-            if argumentos.glove
-            else None
+        ruta_glove = _resolver_modelo(
+            argumentos.glove, "glove_corpus.txt.gz", "glove-wiki-gigaword-50.gz"
         )
-        if argumentos.fasttext:
-            print("Cargando vectores FastText...", flush=True)
-        fasttext = (
-            cargar_fasttext(argumentos.fasttext, vocabulario)
-            if argumentos.fasttext
-            else None
+        ruta_fasttext = _resolver_modelo(
+            argumentos.fasttext, "fasttext_corpus.txt.gz", "fasttext-wiki-news-subwords-300.gz"
         )
+
+        glove = None
+        if ruta_glove:
+            print(f"Cargando vectores GloVe ({ruta_glove.name})...", flush=True)
+            glove = cargar_glove(ruta_glove, vocabulario)
+
+        fasttext = None
+        if ruta_fasttext:
+            print(f"Cargando vectores FastText ({ruta_fasttext.name})...", flush=True)
+            fasttext = cargar_fasttext(ruta_fasttext, vocabulario)
+
         resultados = comparar_articulos(
             articulos, argumentos.ids, glove=glove, fasttext=fasttext
         )
@@ -66,8 +82,8 @@ def main(argv=None):
     if argumentos.salida:
         _guardar_csv(argumentos.salida, resultados)
         print(f"\nResultados guardados en: {argumentos.salida}")
-    elif not argumentos.glove or not argumentos.fasttext:
-        print("\nPara ejecutar los dos métodos con embeddings, indica --glove y --fasttext.")
+    elif not glove or not fasttext:
+        print("\nPara ejecutar los dos métodos con embeddings, indica --glove y --fasttext (o coloca los modelos en data/models).")
 
 
 def _guardar_csv(ruta, resultados):
