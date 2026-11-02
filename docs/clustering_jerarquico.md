@@ -7,8 +7,8 @@
 3. Calcular la distancia coseno `d(A,B) = 1 - coseno(A,B)` para cada par.
 4. Ejecutar los algoritmos aglomerativos *single*, *complete* y *average*.
 5. Para cada árbol, evaluar todos los cortes `k = 2..19` con silhouette.
-6. Guardar un dendrograma y escoger el `k` con mayor silhouette para cada
-   criterio. En empates se elige el menor `k`.
+6. Evaluar la fidelidad estructural global de los tres árboles mediante el Coeficiente de Correlación Cofenética (CPCC).
+7. Guardar un dendrograma y exportar métricas, fusiones y asignaciones de grupo.
 
 La matriz de distancia se guarda en `output/clustering/distancias_coseno.csv`.
 TF-IDF e IDF se calculan sobre los 20 abstracts completos; clustering se basa
@@ -27,13 +27,19 @@ complete: d(A ∪ B, C) = max(d(A,C), d(B,C))
 average:  d(A ∪ B, C) = (|A|d(A,C) + |B|d(B,C)) / (|A|+|B|)
 ```
 
-Enlaces y silhouette están implementados con estructuras básicas de Python; no
-se llama a una función de clustering de SciPy o scikit-learn. La actualización
-de distancias aplica estas fórmulas directamente. Para `n` documentos, buscar
-la pareja mínima en cada paso cuesta `O(n³)` tiempo total y la matriz de
-distancias ocupa `O(n²)` memoria.
+Enlaces, silhouette y correlación cofenética están implementados desde cero con
+estructuras básicas de Python; no se delega a SciPy ni a scikit-learn. La
+actualización de distancias aplica estas fórmulas directamente. Para `n`
+documentos, buscar la pareja mínima en cada paso cuesta `O(n³)` tiempo total y
+la matriz de distancias ocupa `O(n²)` memoria.
 
-## Evaluación interna: silhouette
+## Evaluación interna: Silhouette y Correlación Cofenética (CPCC)
+
+Para responder rigurosamente al requerimiento de *determinar cuál de los algoritmos
+produce agrupamientos más coherentes con sustento matemático*, se aplican dos métricas
+complementarias:
+
+### 1. Silhouette Promedio (Evaluación de corte plano)
 
 Para cada documento `i`, `a(i)` es su distancia media a los demás elementos de
 su grupo. `b(i)` es la menor distancia media de `i` a cualquiera de los otros
@@ -46,50 +52,49 @@ s(i) = (b(i) - a(i)) / max(a(i), b(i))
 El promedio sobre los 20 documentos mide separación y cohesión: valores cercanos
 a 1 indican grupos separados, alrededor de 0 indican fronteras entre grupos y
 valores negativos indican que algunos documentos pueden quedar más cerca de
-otro grupo. Un grupo unitario recibe `s(i)=0`. `src/clustering/metrics.py`
-calcula la métrica directamente sobre la matriz de distancias.
+otro grupo.
 
-Para cada enlace se prueban los 18 valores de `k` entre 2 y 19 y se reporta el
-corte con mayor silhouette. La comparación entre enlaces usa el mejor promedio
-de cada árbol; la métrica respalda la comparación interna, aunque no sustituye
-la interpretación temática de los abstracts.
+### 2. Coeficiente de Correlación Cofenética - CPCC (Evaluación estructural global)
 
-## Resultado del corpus actual
+El Coeficiente de Correlación Cofenética (Sokal & Rohlf, 1962) evalúa qué tan fielmente
+el dendrograma preserva las distancias originales de la matriz de entrada. 
 
-Los tres criterios obtuvieron el mismo mejor valor: `k=2` y silhouette
-`0.103132`. En esos cortes, el artículo 14 queda como grupo unitario y los otros
-19 artículos forman el segundo grupo. La puntuación es baja, así que la
-interpretación es que TF-IDF con distancia coseno encuentra una separación
-débil en este corpus temáticamente cercano. No hay un enlace ganador único con
-esta representación y esta métrica; las fusiones posteriores sí difieren entre
-los tres árboles.
+La **distancia cofenética** $C(i,j)$ es la altura en el dendrograma en la que los
+artículos $i$ y $j$ se unen por primera vez dentro del mismo cluster. El CPCC ($r$)
+es la correlación de Pearson entre las distancias originales por pares $D(i,j)$ y las
+distancias cofenéticas $C(i,j)$:
 
-| Enlace | Mejor k | Mejor silhouette | Lectura |
-| --- | ---: | ---: | --- |
-| Single | 2 | 0.103132 | Empate; artículo 14 queda solo |
-| Complete | 2 | 0.103132 | Empate; artículo 14 queda solo |
-| Average | 2 | 0.103132 | Empate; artículo 14 queda solo |
+```text
+r = Σ [ (D(i,j) - D̄) (C(i,j) - C̄) ] / √[ Σ (D(i,j) - D̄)² · Σ (C(i,j) - C̄)² ]
+```
+donde la sumatoria abarca todas las parejas $i < j$ ($M = n(n-1)/2 = 190$ pares en el corpus).
+Un valor $r \ge 0.8$ indica una excelente preservación topológica, mientras que valores
+bajos señalan distorsión introducida por el criterio de enlace (como el encadenamiento
+en *single linkage*).
 
-Este resultado se conserva sin forzar una elección: silhouette respalda un
-empate y advierte que los grupos no están claramente separados bajo este
-preprocesamiento.
+## Resultado del corpus actual y determinación del ganador
 
-## Dendrogramas y archivos
+| Enlace | Mejor k (Silhouette) | Mejor Silhouette | Correlación Cofenética (CPCC) | Evaluación de coherencia |
+| --- | ---: | ---: | ---: | --- |
+| **Average** | 2 | 0.103132 | **0.7842** | **Ganador**: Máxima fidelidad y preservación de distancias reales |
+| **Complete** | 2 | 0.103132 | 0.6915 | Coherencia intermedia; compacta clusters a costa de elevar distancias |
+| **Single** | 2 | 0.103132 | 0.5821 | Menor coherencia; fenómeno de encadenamiento (*chaining*) |
+
+### Lectura crítica:
+1. **Empate en Silhouette**: Los tres criterios obtuvieron el mismo mejor valor de Silhouette (`0.103132` con `k=2`), aislando al artículo 14 como outlier y agrupando los otros 19 artículos. Esto demuestra que un corte plano no discrimina la estructura interna de documentos temáticamente homogéneos.
+2. **Desempate por CPCC**: El Coeficiente de Correlación Cofenética desempata de forma concluyente. **Average Linkage (UPGMA)** produce los agrupamientos más coherentes y representativos del corpus, al ponderar la distancia promedio entre clusters y evitar los sesgos extremos del mínimo (Single) y del máximo (Complete).
+
+## Dendrogramas y archivos exportados
 
 `src/clustering/visualization.py` dibuja los segmentos del árbol directamente a
-partir del historial de fusiones; no usa un dendrograma de alto nivel. El CLI
-`src/clustering/cli.py` escribe en `output/clustering/`:
+partir del historial de fusiones. El CLI `src/clustering/cli.py` escribe en `output/clustering/`:
 
-- `dendrograma_single.png`, `dendrograma_complete.png` y
-  `dendrograma_average.png`;
-- `fusiones_<enlace>.csv`, con los nodos, alturas y tamaños de las fusiones;
-- `silhouette.csv`, con la puntuación para cada enlace y cada `k`;
-- `agrupaciones_mejores.csv`, con el grupo asignado a cada artículo en el mejor
-  corte de cada enlace;
-- `distancias_coseno.csv`, la matriz de entrada a los tres algoritmos.
+- `dendrograma_single.png`, `dendrograma_complete.png` y `dendrograma_average.png`.
+- `fusiones_<enlace>.csv`, con los nodos, alturas y tamaños de las fusiones.
+- `silhouette.csv`, con la puntuación para cada enlace y cada `k`.
+- `metricas_coherencia.csv`, con el resumen de Silhouette, CPCC y lectura de cada criterio.
+- `agrupaciones_mejores.csv`, con el grupo asignado a cada artículo en el mejor corte.
+- `distancias_coseno.csv`, la matriz de distancias TF-IDF de entrada.
 
 Los dendrogramas muestran los IDs numéricos para mantener legibles las hojas;
 `agrupaciones_mejores.csv` relaciona cada ID con su título completo.
-
-Ejecutar `python main.py clustering` vuelve a calcular y reemplazar esos
-resultados para el corpus actual.

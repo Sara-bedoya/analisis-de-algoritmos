@@ -1,7 +1,7 @@
-"""Prepara distancias, construye árboles y evalúa sus cortes."""
+"""Prepara distancias, construye árboles y evalúa sus cortes y coherencia."""
 
 from src.clustering.hierarchical import METODOS, clustering_jerarquico, cortar_arbol
-from src.clustering.metrics import silhouette_promedio
+from src.clustering.metrics import correlacion_cofenetetica, silhouette_promedio
 from src.similarity.classic import construir_tfidf, similitud_coseno_vectores
 
 
@@ -26,7 +26,7 @@ def matriz_distancias_tfidf(articulos):
 
 
 def evaluar_enlaces(matriz_distancias):
-    """Evalúa silhouette para k=2..n-1 en los tres árboles jerárquicos."""
+    """Evalúa silhouette y correlación cofenética (CPCC) en los tres árboles jerárquicos."""
     cantidad = len(matriz_distancias)
     if cantidad < 3:
         raise ValueError("Se requieren al menos tres abstracts para evaluar clustering.")
@@ -43,10 +43,12 @@ def evaluar_enlaces(matriz_distancias):
             puntuaciones,
             key=lambda resultado: (resultado[1], -resultado[0]),
         )
+        cpcc = correlacion_cofenetetica(matriz_distancias, fusiones)
         resultados[metodo] = {
             "fusiones": fusiones,
             "puntuaciones": puntuaciones,
             "mejor_k": mejor_k,
             "mejor_silhouette": mejor_silhouette,
+            "cpcc": cpcc,
         }
     return resultados

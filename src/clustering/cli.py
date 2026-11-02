@@ -35,6 +35,7 @@ def main(argv=None):
         resultados = evaluar_enlaces(matriz_distancias)
         _guardar_matriz(argumentos.salida / "distancias_coseno.csv", ids, matriz_distancias)
         _guardar_puntuaciones(argumentos.salida / "silhouette.csv", resultados)
+        _guardar_resumen_metricas(argumentos.salida / "metricas_coherencia.csv", resultados)
         _guardar_agrupaciones(
             argumentos.salida / "agrupaciones_mejores.csv",
             articulos,
@@ -59,25 +60,20 @@ def main(argv=None):
         parser.error(str(error))
 
     print(f"Abstracts agrupados: {len(ids)}")
+    print("\n--- Evaluación de Coherencia Cofenética (CPCC) y Silhouette ---")
     for metodo in METODOS:
         detalle = resultados[metodo]
         print(
-            f"{metodo.title()} linkage: k={detalle['mejor_k']}, "
-            f"silhouette={detalle['mejor_silhouette']:.6f}"
+            f"  {metodo.title():<10} Linkage | CPCC: {detalle['cpcc']:.6f} | "
+            f"Mejor k: {detalle['mejor_k']} (Silhouette: {detalle['mejor_silhouette']:.6f})"
         )
-    mayor_silhouette = max(
-        resultados[metodo]["mejor_silhouette"] for metodo in METODOS
+
+    mejor_cpcc = max(resultados[m]["cpcc"] for m in METODOS)
+    ganador_cpcc = [m for m in METODOS if resultados[m]["cpcc"] == mejor_cpcc][0]
+    print(
+        f"\n🏆 Algoritmo con mayor coherencia estructural (CPCC): {ganador_cpcc.title()} Linkage "
+        f"({mejor_cpcc:.6f}) - Preserva con mayor fidelidad las distancias reales del corpus."
     )
-    mejores_metodos = [
-        metodo
-        for metodo in METODOS
-        if abs(resultados[metodo]["mejor_silhouette"] - mayor_silhouette) < 1e-12
-    ]
-    if len(mejores_metodos) == 1:
-        print(f"Mayor silhouette: {mejores_metodos[0].title()} linkage")
-    else:
-        nombres = ", ".join(metodo.title() for metodo in mejores_metodos)
-        print(f"Empate en mayor silhouette entre: {nombres}")
     print(f"Archivos guardados en: {argumentos.salida}")
 
 
@@ -106,41 +102,63 @@ def _guardar_puntuaciones(ruta, resultados):
                 })
 
 
+def _guardar_resumen_metricas(ruta, resultados):
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    with ruta.open("w", encoding="utf-8-sig", newline="") as archivo:
+        campos = ["metodo", "mejor_k_silhouette", "mejor_silhouette", "cpcc", "interpretacion_cpcc"]
+        escritor = csv.DictWriter(archivo, fieldnames=campos)
+        escritor.writeheader()
+        for metodo, detalle in resultados.items():
+            cpcc = detalle["cpcc"]
+            interpretacion = (
+                "Excelente fidelidad" if cpcc >= 0.8 else
+                "Buena fidelidad" if cpcc >= 0.7 else
+                "Distorsión moderada"
+            )
+            escritor.writerow({
+                "metodo": metodo,
+                "mejor_k_silhouette": detalle["mejor_k"],
+                "mejor_silhouette": f"{detalle['mejor_silhouette']:.6f}",
+                "cpcc": f"{cpcc:.6f}",
+                "interpretacion_cpcc": interpretacion,
+            })
+
+
 def _guardar_fusiones(ruta, fusiones):
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with ruta.open("w", encoding="utf-8-sig", newline="") as archivo:
-        escritor = csv.writer(archivo)
-        escritor.writerow(["paso", "nodo_izquierdo", "nodo_derecho", "distancia", "tamano"])
+        campos = ["paso", "left", "right", "distance", "size"]
+        escritor = csv.DictWriter(archivo, fieldnames=campos)
+        escritor.writeheader()
         for paso, fusion in enumerate(fusiones, start=1):
-            escritor.writerow([
-                paso,
-                fusion.left,
-                fusion.right,
-                f"{fusion.distance:.12f}",
-                fusion.size,
-            ])
+            escritor.writerow({
+                "paso": paso,
+                "left": fusion.left,
+                "right": fusion.right,
+                "distance": f"{fusion.distance:.12f}",
+                "size": fusion.size,
+            })
 
 
 def _guardar_agrupaciones(ruta, articulos, ids, resultados):
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with ruta.open("w", encoding="utf-8-sig", newline="") as archivo:
-        campos = ["id", "titulo"] + [f"{metodo}_grupo" for metodo in METODOS]
+        campos = ["id", "titulo", *[f"grupo_{metodo}" for metodo in METODOS]]
         escritor = csv.DictWriter(archivo, fieldnames=campos)
         escritor.writeheader()
+        asignaciones = {}
+        for metodo in METODOS:
+            detalle = resultados[metodo]
+            etiquetas = cortar_arbol(len(ids), detalle["fusiones"], detalle["mejor_k"])
+            asignaciones[metodo] = {identificador: etiqueta + 1 for identificador, etiqueta in zip(ids, etiquetas)}
 
-        etiquetas_por_metodo = {}
-        for metodo, detalle in resultados.items():
-            etiquetas_por_metodo[metodo] = cortar_arbol(
-                len(ids), detalle["fusiones"], detalle["mejor_k"]
-            )
-
-        for indice, identificador in enumerate(ids):
+        for identificador in ids:
             fila = {
                 "id": identificador,
                 "titulo": articulos[identificador]["titulo"],
             }
             for metodo in METODOS:
-                fila[f"{metodo}_grupo"] = etiquetas_por_metodo[metodo][indice] + 1
+                fila[f"grupo_{metodo}"] = asignaciones[metodo][identificador]
             escritor.writerow(fila)
 
 

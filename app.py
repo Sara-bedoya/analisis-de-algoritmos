@@ -372,20 +372,32 @@ def _render_clustering(articulos: dict[int, dict[str, str]]) -> None:
 
     ids = estado["ids"]
     resultados = estado["resultados"]
+    mejor_cpcc = max(resultados[m]["cpcc"] for m in METODOS)
+    ganador_cpcc = [m for m in METODOS if resultados[m]["cpcc"] == mejor_cpcc][0]
+
+    st.success(
+        f"🏆 **Algoritmo con mayor coherencia estructural:** **{ganador_cpcc.title()} Linkage** "
+        f"obtiene un Coeficiente de Correlación Cofenética (CPCC) de **{mejor_cpcc:.4f}**, "
+        f"siendo el criterio que mejor preserva las distancias originales del corpus."
+    )
+
     filas_resumen = [
         {
-            "Enlace": metodo.title(),
-            "Mejor k": resultados[metodo]["mejor_k"],
-            "Silhouette": resultados[metodo]["mejor_silhouette"],
+            "Criterio de Enlace": metodo.title(),
+            "Correlación Cofenética (CPCC)": f"{resultados[metodo]['cpcc']:.4f}",
+            "Mejor k (Silhouette)": resultados[metodo]["mejor_k"],
+            "Silhouette Máximo": f"{resultados[metodo]['mejor_silhouette']:.4f}",
         }
         for metodo in METODOS
     ]
+
     metricas = st.columns(3)
-    for columna, fila in zip(metricas, filas_resumen):
+    for columna, metodo in zip(metricas, METODOS):
+        detalle = resultados[metodo]
         columna.metric(
-            f"{fila['Enlace']} · mejor silhouette",
-            f"{fila['Silhouette']:.4f}",
-            f"k = {fila['Mejor k']}",
+            f"{metodo.title()} Linkage",
+            f"CPCC: {detalle['cpcc']:.4f}",
+            f"Silhouette: {detalle['mejor_silhouette']:.4f} (k={detalle['mejor_k']})",
         )
     st.dataframe(filas_resumen, width="stretch", hide_index=True)
 
@@ -424,10 +436,12 @@ def _render_clustering(articulos: dict[int, dict[str, str]]) -> None:
             derecha.markdown("**Artículos en el mejor corte**")
             derecha.dataframe(grupos, width="stretch", hide_index=True)
     st.caption(
-        "Silhouette cercana a 0 indica separación débil. Un empate entre "
-        "enlaces se reporta tal cual; no implica que exista un ganador único."
+        "💡 **Sustento matemático de coherencia:** El coeficiente Silhouette evalúa la cohesión "
+        "y separación en un corte plano específico (empatando en k=2), mientras que la Correlación "
+        "Cofenética (CPCC) evalúa la fidelidad del dendrograma completo respecto a la matriz de "
+        "distancias original (Sokal & Rohlf, 1962). Esto permite determinar formalmente cuál "
+        "algoritmo produce agrupamientos más coherentes."
     )
-
 
 def _render_busqueda(articulos: dict[int, dict[str, str]]) -> None:
     _encabezado_seccion(
