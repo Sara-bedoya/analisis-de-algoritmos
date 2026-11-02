@@ -1,47 +1,58 @@
-"""
-Módulo encargado de leer archivos PDF y extraer sus abstracts.
+"""Lectura de PDF y extracción de abstracts del corpus."""
 
-Utiliza PyMuPDF para obtener el texto de los artículos científicos
-del corpus del proyecto.
-"""
+from __future__ import annotations
+
+import logging
+import re
+from pathlib import Path
 
 import pymupdf
-import re
 
-def extraer_texto_pdf(ruta_pdf):
-    """
-    Extrae el texto completo de un archivo PDF.
+logger = logging.getLogger(__name__)
+
+
+def extraer_texto_pdf(ruta_pdf: str | Path) -> str:
+    """Extrae el texto completo de un archivo PDF.
 
     Args:
-        ruta_pdf (str): Ruta del archivo PDF.
+        ruta_pdf: Ruta del archivo PDF.
 
     Returns:
-        str: Texto completo del documento.
+        Texto concatenado de todas las páginas.
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe.
+        RuntimeError: Si PyMuPDF no puede abrir o leer el documento.
     """
+    ruta = Path(ruta_pdf)
+    if not ruta.is_file():
+        raise FileNotFoundError(f"No existe el PDF: {ruta}")
 
-    # Al utilizar with, el PDF se cierra automáticamente.
-    with pymupdf.open(ruta_pdf) as documento:
+    try:
+        with pymupdf.open(ruta) as documento:
+            partes_texto = [pagina.get_text() for pagina in documento]
+    except FileNotFoundError:
+        raise
+    except Exception as error:
+        logger.exception("No se pudo leer %s", ruta)
+        raise RuntimeError(f"No se pudo leer el PDF {ruta.name}: {error}") from error
 
-        # Lista que almacenará el texto de cada página.
-        partes_texto = []
-
-        # Recorremos las páginas del documento.
-        for pagina in documento:
-            texto = pagina.get_text()
-            partes_texto.append(texto)
-
-        # Unimos el contenido de todas las páginas.
-        texto_completo = "\n".join(partes_texto)
-
-    return texto_completo
+    return "\n".join(partes_texto)
 
 
-def extraer_abstract(texto):
+def extraer_abstract(texto: str | None) -> str | None:
+    """Localiza el abstract y recorta hasta Keywords o Introduction.
+
+    Args:
+        texto: Texto plano extraído del PDF.
+
+    Returns:
+        Abstract recortado, o ``None`` si no hay límites reconocibles.
     """
-    Busca el abstract y trata de identificar su final.
-    Devuelve None si no encuentra límites reconocibles.
-    """
-    
+    if not texto or not str(texto).strip():
+        logger.warning("Se pidió extraer abstract de un texto vacío.")
+        return None
+
     # Caso especial del artículo 7:
     # las palabras clave aparecen antes del resumen.
     marcador_7 = "The rapid expansion of Learning Analytics"
@@ -89,7 +100,7 @@ def extraer_abstract(texto):
 
     # Reconocemos los encabezados con y sin espacios.
     patron_inicio = re.compile(
-        r"(?im)^[ \t]*(:?"
+        r"(?im)^[ \t]*(?:"
         r"A\s*B\s*S\s*T\s*R\s*A\s*C\s*T"
         r"|Abstract"
         r")[ \t]*:?[ \t]*$"

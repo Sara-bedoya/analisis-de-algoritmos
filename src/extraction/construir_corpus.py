@@ -60,10 +60,18 @@ def construir_corpus():
         if identificador not in METADATOS:
             raise ValueError(f"Faltan metadatos para el artículo {identificador}.")
 
-        texto_pdf = extraer_texto_pdf(str(archivo))
+        try:
+            texto_pdf = extraer_texto_pdf(str(archivo))
+        except (OSError, RuntimeError) as error:
+            raise RuntimeError(
+                f"Falló la lectura del artículo {identificador}: {error}"
+            ) from error
+
         abstract = extraer_abstract(texto_pdf)
         if not abstract or not abstract.strip():
-            raise ValueError(f"No se pudo extraer el abstract del artículo {identificador}.")
+            raise ValueError(
+                f"No se pudo extraer el abstract del artículo {identificador}."
+            )
 
         titulo, autores = METADATOS[identificador]
         registros.append({

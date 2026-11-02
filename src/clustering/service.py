@@ -7,8 +7,12 @@ from src.similarity.classic import construir_tfidf, similitud_coseno_vectores
 
 def matriz_distancias_tfidf(articulos):
     """Crea distancia coseno 1-coseno entre los TF-IDF de todos los abstracts."""
+    if not articulos:
+        raise ValueError("No hay artículos para construir la matriz de distancias.")
     ids = sorted(articulos)
     documentos = [articulos[identificador]["abstract_normalizado"] for identificador in ids]
+    if any(not (documento or "").strip() for documento in documentos):
+        raise ValueError("Hay abstracts normalizados vacíos; no se puede calcular TF-IDF.")
     vectores = construir_tfidf(documentos)
     matriz = [[0.0 for _ in ids] for _ in ids]
     for i in range(len(ids)):

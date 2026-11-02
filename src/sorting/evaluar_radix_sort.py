@@ -1,10 +1,8 @@
+"""Evalúa Radix Sort con las frecuencias reales del corpus."""
 
-"""
-Evalúa Radix Sort con las frecuencias reales
-de las palabras de los abstracts.
-"""
+from __future__ import annotations
 
-import csv
+import logging
 import sys
 import time
 from pathlib import Path
@@ -12,36 +10,33 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.sorting.radix_sort import radix_sort
+from src.sorting.service import cargar_pares
+from src.sorting.tipos import extraer_top
 
 RUTA_CSV = Path("data/frecuencias_palabras.csv")
 
-def evaluar_radix_sort():
-    frecuencias = []
 
-    # Leemos las frecuencias del archivo CSV.
-    with open(RUTA_CSV, "r", encoding="utf-8", newline="") as archivo:
-        lector = csv.DictReader(archivo)
+def evaluar_radix_sort() -> None:
+    """Ordena tuplas, valida el orden y muestra el Top 15 del arreglo."""
+    pares = cargar_pares(RUTA_CSV)
 
-        for fila in lector:
-            frecuencias.append(int(fila["frecuencia"]))
-
-    # Medimos únicamente el tiempo de ordenamiento.
     inicio = time.perf_counter()
-    resultado = radix_sort(frecuencias)
-    fin = time.perf_counter()
-
-    tiempo_ms = (fin - inicio) * 1000
+    resultado = radix_sort(pares)
+    tiempo_ms = (time.perf_counter() - inicio) * 1000
 
     correcto = all(
-        resultado[i] <= resultado[i + 1]
-        for i in range(len(resultado) - 1)
+        resultado[i][0] <= resultado[i + 1][0] for i in range(len(resultado) - 1)
     )
 
     print("========== EVALUACIÓN RADIX SORT ==========")
-    print(f"Palabras procesadas: {len(frecuencias)}")
+    print(f"Palabras procesadas: {len(pares)}")
     print(f"Ordenamiento correcto: {correcto}")
     print(f"Tiempo de ejecución: {tiempo_ms:.6f} ms")
+    print("\n15 palabras más frecuentes:")
+    for frecuencia, palabra in extraer_top(resultado, 15):
+        print(f"{palabra}: {frecuencia}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     evaluar_radix_sort()

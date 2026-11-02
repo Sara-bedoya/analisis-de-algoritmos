@@ -1,4 +1,4 @@
-"""Interfaz web Streamlit para los requerimientos 1, 2 y 3 del proyecto."""
+"""Interfaz web Streamlit para los requerimientos 1, 2, 3 y el Top 15."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import io
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -18,6 +19,7 @@ from src.searching.service import comparar_patron
 from src.similarity.corpus import cargar_corpus
 from src.similarity.embeddings import cargar_fasttext, cargar_glove
 from src.similarity.service import comparar_articulos
+from src.sorting.service import pares_desde_articulos, ranking_por_algoritmo
 
 
 ROOT = Path(__file__).resolve().parent
@@ -32,6 +34,7 @@ ACCENTOS = {
     "lavanda": "#6656D9",
     "menta": "#168C82",
     "coral": "#E57C5B",
+    "ambar": "#C9842A",
 }
 
 st.set_page_config(
@@ -123,24 +126,31 @@ st.markdown(
 
 
 @st.cache_data(show_spinner=False)
-def obtener_corpus():
+def obtener_corpus() -> dict[int, dict[str, str]]:
     """Carga el catálogo una vez y lo conserva en la caché de datos."""
     return cargar_corpus(CORPUS_PATH)
 
 
 @st.cache_resource(show_spinner="Leyendo vectores del modelo; esto puede tardar.")
-def obtener_embeddings(nombre, ruta, vocabulario):
+def obtener_embeddings(nombre: str, ruta: str, vocabulario: tuple[str, ...]):
     """Lee una vez el modelo elegido y conserva solo los vectores del corpus."""
     if nombre == "GloVe":
         return cargar_glove(ruta, set(vocabulario))
     return cargar_fasttext(ruta, set(vocabulario))
 
 
-def _etiqueta_articulo(identificador, articulos):
+@st.cache_data(show_spinner=False)
+def obtener_pares_frecuencia(textos: tuple[str, ...]) -> list[tuple[int, str]]:
+    """Cuenta términos de contenido a partir de los abstracts del corpus."""
+    articulos_minimos = {indice: {"abstract": texto} for indice, texto in enumerate(textos)}
+    return pares_desde_articulos(articulos_minimos)
+
+
+def _etiqueta_articulo(identificador: int, articulos: dict[int, dict[str, str]]) -> str:
     return f"{identificador:02d} · {articulos[identificador]['titulo']}"
 
 
-def _encabezado_seccion(etiqueta, titulo, descripcion):
+def _encabezado_seccion(etiqueta: str, titulo: str, descripcion: str) -> None:
     st.markdown(
         f"""
         <div class="section-heading">
@@ -153,7 +163,7 @@ def _encabezado_seccion(etiqueta, titulo, descripcion):
     )
 
 
-def _csv_descargable(registros):
+def _csv_descargable(registros: list[dict[str, Any]]) -> bytes:
     salida = io.StringIO()
     if registros:
         escritor = csv.DictWriter(salida, fieldnames=list(registros[0]))
@@ -162,7 +172,13 @@ def _csv_descargable(registros):
     return salida.getvalue().encode("utf-8-sig")
 
 
-def _render_similitud(articulos):
+def _init_estado() -> None:
+    """Crea las claves de resultado para que un clic posterior no las borre."""
+    for clave in ("similitud", "clustering", "busqueda", "frecuencias"):
+        st.session_state.setdefault(clave, None)
+
+
+def _render_similitud(articulos: dict[int, dict[str, str]]) -> None:
     _encabezado_seccion(
         "01 · Requerimiento 1",
         "Similitud textual",
@@ -182,7 +198,7 @@ def _render_similitud(articulos):
     )
 
     modelos_disponibles = [nombre for nombre, ruta in MODEL_PATHS.items() if ruta.is_file()]
-    modelos_elegidos = []
+    modelos_elegidos: list[str] = []
     if modelos_disponibles:
         with st.expander("Modelos de embeddings (opcional)"):
             st.caption(
@@ -215,55 +231,51 @@ def _render_similitud(articulos):
             key="confirm_large_comparison",
         )
     ejecutar = st.button("Calcular similitud", type="primary", key="run_similarity")
-    if not ejecutar:
-        return
-    if len(seleccion) < 2:
-        st.error("Selecciona al menos dos artículos.")
-        return
-    if not confirmacion:
-        st.info("Confirma la comparación para continuar.")
-        return
-
-    modelos = {}
-    if modelos_elegidos:
-        vocabulario = tuple(sorted({
-            token
-            for articulo in articulos.values()
-            for token in articulo["abstract_normalizado"].split()
-        }))
-        try:
-            for nombre in modelos_elegidos:
-                with st.spinner(f"Cargando {nombre}…"):
-                    modelos[nombre] = obtener_embeddings(
-                        nombre, str(MODEL_PATHS[nombre]), vocabulario
+    if ejecutar:
+        if len(seleccion) < 2:
+            st.error("Selecciona al menos dos artículos.")
+        elif not confirmacion:
+            st.info("Confirma la comparación para continuar.")
+        else:
+            modelos = {}
+            try:
+                if modelos_elegidos:
+                    vocabulario = tuple(sorted({
+                        token
+                        for articulo in articulos.values()
+                        for token in articulo["abstract_normalizado"].split()
+                    }))
+                    for nombre in modelos_elegidos:
+                        with st.spinner(f"Cargando {nombre}…"):
+                            modelos[nombre] = obtener_embeddings(
+                                nombre, str(MODEL_PATHS[nombre]), vocabulario
+                            )
+                with st.spinner("Calculando las medidas para los artículos seleccionados…"):
+                    resultados = comparar_articulos(
+                        articulos,
+                        seleccion,
+                        glove=modelos.get("GloVe"),
+                        fasttext=modelos.get("FastText"),
                     )
-        except (OSError, ValueError, RuntimeError) as error:
-            st.error(f"No fue posible cargar el modelo: {error}")
-            return
+            except (OSError, ValueError, RuntimeError) as error:
+                st.error(f"No fue posible calcular la similitud: {error}")
+            else:
+                filas = []
+                for resultado in resultados:
+                    filas.append({
+                        "ID A": resultado["id_a"],
+                        "Artículo A": articulos[resultado["id_a"]]["titulo"],
+                        "ID B": resultado["id_b"],
+                        "Artículo B": articulos[resultado["id_b"]]["titulo"],
+                        **resultado["medidas"],
+                        **resultado["coberturas"],
+                    })
+                st.session_state.similitud = filas
 
-    with st.spinner("Calculando las medidas para los artículos seleccionados…"):
-        try:
-            resultados = comparar_articulos(
-                articulos,
-                seleccion,
-                glove=modelos.get("GloVe"),
-                fasttext=modelos.get("FastText"),
-            )
-        except (ValueError, RuntimeError) as error:
-            st.error(str(error))
-            return
+    filas = st.session_state.similitud
+    if not filas:
+        return
 
-    filas = []
-    for resultado in resultados:
-        fila = {
-            "ID A": resultado["id_a"],
-            "Artículo A": articulos[resultado["id_a"]]["titulo"],
-            "ID B": resultado["id_b"],
-            "Artículo B": articulos[resultado["id_b"]]["titulo"],
-            **resultado["medidas"],
-            **resultado["coberturas"],
-        }
-        filas.append(fila)
     st.dataframe(filas, width="stretch", hide_index=True)
     st.metric("Parejas comparadas", len(filas))
     st.download_button(
@@ -278,7 +290,7 @@ def _render_similitud(articulos):
     )
 
 
-def _render_clustering(articulos):
+def _render_clustering(articulos: dict[int, dict[str, str]]) -> None:
     _encabezado_seccion(
         "02 · Requerimiento 2",
         "Clustering jerárquico",
@@ -288,17 +300,24 @@ def _render_clustering(articulos):
         "Compara Single, Complete y Average Linkage sobre TF-IDF con distancia "
         "coseno. El mejor corte de cada árbol se elige mediante silhouette."
     )
-    if not st.button("Calcular clustering", type="primary", key="run_clustering"):
+    if st.button("Calcular clustering", type="primary", key="run_clustering"):
+        with st.spinner("Construyendo los tres árboles y evaluando sus cortes…"):
+            try:
+                ids, distancias = matriz_distancias_tfidf(articulos)
+                if not distancias:
+                    raise ValueError("La matriz de distancias está vacía.")
+                resultados = evaluar_enlaces(distancias)
+            except (ValueError, RuntimeError) as error:
+                st.error(str(error))
+            else:
+                st.session_state.clustering = {"ids": ids, "resultados": resultados}
+
+    estado = st.session_state.clustering
+    if not estado:
         return
 
-    with st.spinner("Construyendo los tres árboles y evaluando sus cortes…"):
-        try:
-            ids, distancias = matriz_distancias_tfidf(articulos)
-            resultados = evaluar_enlaces(distancias)
-        except (ValueError, RuntimeError) as error:
-            st.error(str(error))
-            return
-
+    ids = estado["ids"]
+    resultados = estado["resultados"]
     filas_resumen = [
         {
             "Enlace": metodo.title(),
@@ -356,7 +375,7 @@ def _render_clustering(articulos):
     )
 
 
-def _render_busqueda(articulos):
+def _render_busqueda(articulos: dict[int, dict[str, str]]) -> None:
     _encabezado_seccion(
         "03 · Requerimiento 3",
         "Búsqueda exacta",
@@ -374,18 +393,21 @@ def _render_busqueda(articulos):
         value=7,
         key="search_repetitions",
     )
-    if not st.button("Buscar patrón", type="primary", key="run_search"):
-        return
-    if patron == "":
-        st.error("Ingresa un patrón no vacío.")
-        return
+    if st.button("Buscar patrón", type="primary", key="run_search"):
+        if patron == "":
+            st.error("Ingresa un patrón no vacío.")
+        else:
+            with st.spinner("Buscando en los 20 abstracts con los tres algoritmos…"):
+                try:
+                    resultados = comparar_patron(articulos, patron, repeticiones)
+                except ValueError as error:
+                    st.error(str(error))
+                else:
+                    st.session_state.busqueda = resultados
 
-    with st.spinner("Buscando en los 20 abstracts con los tres algoritmos…"):
-        try:
-            resultados = comparar_patron(articulos, patron, repeticiones)
-        except ValueError as error:
-            st.error(str(error))
-            return
+    resultados = st.session_state.busqueda
+    if not resultados:
+        return
 
     resumen = []
     ocurrencias = []
@@ -436,16 +458,89 @@ def _render_busqueda(articulos):
     )
 
 
-def main():
+def _render_frecuencias(articulos: dict[int, dict[str, str]]) -> None:
+    _encabezado_seccion(
+        "04 · Ordenamiento",
+        "Top 15 de términos",
+        "Counting, Radix y Bucket Sort ordenan tuplas (frecuencia, término).",
+    )
+    st.write(
+        "Se tokenizan solo palabras alfabéticas y se eliminan stopwords en "
+        "inglés. Cada algoritmo mueve la tupla completa; el ranking se recorta "
+        "del arreglo ordenado, sin reconstruir un diccionario externo."
+    )
+    if st.button("Calcular Top 15", type="primary", key="run_top15"):
+        with st.spinner("Contando términos y ordenando con los tres algoritmos…"):
+            try:
+                textos = tuple(
+                    articulo.get("abstract") or articulo.get("abstract_normalizado", "")
+                    for articulo in articulos.values()
+                )
+                pares = obtener_pares_frecuencia(textos)
+                if not pares:
+                    raise ValueError("No quedaron términos para ordenar.")
+                rankings = ranking_por_algoritmo(pares, n=15)
+            except (ValueError, TypeError, RuntimeError) as error:
+                st.error(f"No fue posible calcular el Top 15: {error}")
+            else:
+                st.session_state.frecuencias = {
+                    "vocabulario": len(pares),
+                    "rankings": rankings,
+                }
+
+    estado = st.session_state.frecuencias
+    if not estado:
+        return
+
+    st.metric("Términos distintos (sin stopwords)", estado["vocabulario"])
+    rankings = estado["rankings"]
+    coinciden = (
+        rankings["Counting Sort"]
+        == rankings["Radix Sort"]
+        == rankings["Bucket Sort"]
+    )
+    if coinciden:
+        st.success("Los tres algoritmos producen el mismo Top 15 a partir de las tuplas.")
+    else:
+        st.warning("Los rankings no coinciden; revisa la estabilidad de los algoritmos.")
+
+    pestanas = st.tabs(list(rankings))
+    filas_csv: list[dict[str, Any]] = []
+    for pestana, (nombre, top_15) in zip(pestanas, rankings.items()):
+        filas = [
+            {"Posición": posicion, "Palabra": palabra, "Frecuencia": frecuencia}
+            for posicion, (frecuencia, palabra) in enumerate(top_15, start=1)
+        ]
+        for fila in filas:
+            filas_csv.append({"Algoritmo": nombre, **fila})
+        with pestana:
+            st.dataframe(filas, width="stretch", hide_index=True)
+
+    st.download_button(
+        "Descargar Top 15 CSV",
+        data=_csv_descargable(filas_csv),
+        file_name="top_15_algoritmos.csv",
+        mime="text/csv",
+    )
+    st.caption(
+        "El Top 15 son los últimos 15 elementos del arreglo ordenado de forma "
+        "ascendente, invertidos. Palabras como and, the u of no aparecen porque "
+        "se filtraron como stopwords."
+    )
+
+
+def main() -> None:
+    """Punto de entrada de la interfaz."""
+    _init_estado()
     st.markdown(
         """
         <div class="hero">
           <div class="hero-kicker">Proyecto · Análisis de algoritmos</div>
           <h1>Leer la ciencia con algoritmos</h1>
-          <p>Explora similitud, agrupamiento y patrones de texto en un corpus
-          de 20 artículos sobre inteligencia artificial en educación.</p>
+          <p>Explora similitud, agrupamiento, patrones de texto y el ranking
+          de términos en un corpus de 20 artículos sobre IA en educación.</p>
           <span class="hero-chip">20 artículos</span>
-          <span class="hero-chip">3 módulos interactivos</span>
+          <span class="hero-chip">4 módulos interactivos</span>
           <span class="hero-chip">Algoritmos implementados desde cero</span>
         </div>
         """,
@@ -481,14 +576,15 @@ def main():
     st.sidebar.divider()
     st.sidebar.caption(
         "El análisis usa el abstract original para buscar patrones y la versión "
-        "normalizada para similitud y clustering."
+        "normalizada para similitud y clustering. El Top 15 quita stopwords."
     )
 
-    columnas = st.columns(3)
+    columnas = st.columns(4)
     tarjetas = [
-        ("01", "Similitud", "Seis medidas para comparar abstracts." , ACCENTOS["lavanda"]),
+        ("01", "Similitud", "Seis medidas para comparar abstracts.", ACCENTOS["lavanda"]),
         ("02", "Clustering", "Tres enlaces y evaluación silhouette.", ACCENTOS["menta"]),
         ("03", "Búsqueda", "KMP, Boyer–Moore y Rabin–Karp.", ACCENTOS["coral"]),
+        ("04", "Top 15", "Sorts sobre tuplas término–frecuencia.", ACCENTOS["ambar"]),
     ]
     for columna, (numero, titulo, descripcion, color) in zip(columnas, tarjetas):
         columna.markdown(
@@ -502,18 +598,20 @@ def main():
             unsafe_allow_html=True,
         )
 
-    paginas = st.tabs(["Similitud", "Clustering", "Búsqueda"])
+    paginas = st.tabs(["Similitud", "Clustering", "Búsqueda", "Top 15"])
     with paginas[0]:
         _render_similitud(articulos)
     with paginas[1]:
         _render_clustering(articulos)
     with paginas[2]:
         _render_busqueda(articulos)
+    with paginas[3]:
+        _render_frecuencias(articulos)
 
     st.divider()
     st.caption(
-        "Los algoritmos de similitud, clustering y búsqueda se implementan "
-        "en los módulos del proyecto y se reutilizan desde esta interfaz."
+        "Los algoritmos de similitud, clustering, búsqueda y ordenamiento se "
+        "implementan en los módulos del proyecto y se reutilizan desde esta interfaz."
     )
 
 

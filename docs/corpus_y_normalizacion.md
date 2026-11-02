@@ -20,12 +20,12 @@ La función `normalizar_texto` aplica las mismas reglas a todos los abstracts:
 2. Une palabras cortadas con guion al final de línea.
 3. Descompone caracteres Unicode y elimina marcas diacríticas.
 4. Convierte el texto a minúsculas.
-5. Sustituye puntuación por espacios y reduce espacios repetidos.
+5. Conserva estrictamente tokens alfabéticos `[a-z]+` (sin dígitos ni `_`).
 
-No elimina palabras vacías ni aplica stemming o lematización. Esto conserva el
-vocabulario de origen y deja esas transformaciones como decisiones separadas
-para cada algoritmo. El abstract original también se conserva para poder hacer
-búsquedas exactas sin perder mayúsculas ni puntuación.
+No aplica stemming ni lematización. Las stopwords del inglés se eliminan solo
+en el conteo de frecuencias (`tokenizar_para_frecuencias`), no en el texto que
+usan similitud y clustering. El abstract original se conserva para búsquedas
+exactas.
 
 ## Alcance de la validación
 

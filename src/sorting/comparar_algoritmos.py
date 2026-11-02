@@ -1,10 +1,8 @@
+"""Compara Counting, Radix y Bucket Sort sobre las mismas tuplas."""
 
-"""
-Compara Counting Sort, Radix Sort y Bucket Sort
-usando las mismas frecuencias y varias mediciones.
-"""
+from __future__ import annotations
 
-import csv
+import logging
 import sys
 import time
 from pathlib import Path
@@ -12,91 +10,69 @@ from statistics import median
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.sorting.counting_sort import counting_sort
-from src.sorting.radix_sort import radix_sort
-from src.sorting.bucket_sort import bucket_sort
+from src.sorting.service import ALGORITMOS, cargar_pares
+from src.sorting.tipos import TerminoFrecuencia
 
+logger = logging.getLogger(__name__)
 
 RUTA_CSV = Path("data/frecuencias_palabras.csv")
 REPETICIONES = 7
 EJECUCIONES_POR_MEDICION = 100
 
 
-def cargar_frecuencias():
-    """Carga las frecuencias numéricas del CSV."""
-
-    with open(RUTA_CSV, "r", encoding="utf-8", newline="") as archivo:
-        lector = csv.DictReader(archivo)
-        return [int(fila["frecuencia"]) for fila in lector]
+def _esta_ordenado(datos: list[TerminoFrecuencia]) -> bool:
+    """Verifica orden no decreciente por frecuencia."""
+    return all(datos[i][0] <= datos[i + 1][0] for i in range(len(datos) - 1))
 
 
-def medir_tiempo(algoritmo, datos):
-    """Calcula la mediana del tiempo por ejecución en milisegundos."""
+def medir_tiempo(algoritmo, datos: list[TerminoFrecuencia]) -> float:
+    """Mediana del tiempo por ejecución en milisegundos.
 
-    # Ejecución inicial para preparar el algoritmo.
+    Args:
+        algoritmo: Función de ordenamiento.
+        datos: Tuplas de entrada (no se mutan).
+
+    Returns:
+        Mediana en milisegundos.
+    """
     algoritmo(datos)
-
-    mediciones = []
-
+    mediciones: list[float] = []
     for _ in range(REPETICIONES):
         inicio = time.perf_counter()
-
         for _ in range(EJECUCIONES_POR_MEDICION):
             algoritmo(datos)
-
         fin = time.perf_counter()
-
-        tiempo_por_ejecucion = (
-            (fin - inicio) * 1000 / EJECUCIONES_POR_MEDICION
-        )
-
-        mediciones.append(tiempo_por_ejecucion)
-
+        mediciones.append((fin - inicio) * 1000 / EJECUCIONES_POR_MEDICION)
     return median(mediciones)
 
 
-def main():
-    frecuencias = cargar_frecuencias()
-
-    algoritmos = {
-        "Counting Sort": counting_sort,
-        "Radix Sort": radix_sort,
-        "Bucket Sort": bucket_sort,
-    }
-
-    resultados = {}
+def main() -> None:
+    """Mide tiempo y comprueba que los tres sorts produzcan el mismo arreglo."""
+    pares = cargar_pares(RUTA_CSV)
+    resultados: dict[str, list[TerminoFrecuencia]] = {}
 
     print("========== COMPARACIÓN DE ALGORITMOS ==========")
-    print(f"Frecuencias procesadas: {len(frecuencias)}")
+    print(f"Términos procesados: {len(pares)}")
     print(f"Repeticiones por algoritmo: {REPETICIONES}")
     print(f"Ejecuciones por medición: {EJECUCIONES_POR_MEDICION}\n")
 
-    for nombre, algoritmo in algoritmos.items():
-        ordenados = algoritmo(frecuencias)
-
-        correcto = (
-            len(ordenados) == len(frecuencias)
-            and all(
-                ordenados[i] <= ordenados[i + 1]
-                for i in range(len(ordenados) - 1)
-            )
-        )
-
+    for nombre, algoritmo in ALGORITMOS.items():
+        ordenados = algoritmo(pares)
+        correcto = len(ordenados) == len(pares) and _esta_ordenado(ordenados)
         resultados[nombre] = ordenados
-        tiempo = medir_tiempo(algoritmo, frecuencias)
-
+        tiempo = medir_tiempo(algoritmo, pares)
         print(nombre)
         print(f"  Ordenamiento correcto: {correcto}")
         print(f"  Mediana por ejecución: {tiempo:.6f} ms\n")
 
-    # Comprobamos que los tres algoritmos producen el mismo resultado.
     todos_iguales = (
-        resultados["Counting Sort"] == resultados["Radix Sort"]
+        resultados["Counting Sort"]
+        == resultados["Radix Sort"]
         == resultados["Bucket Sort"]
     )
-
     print(f"Los tres resultados coinciden: {todos_iguales}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     main()

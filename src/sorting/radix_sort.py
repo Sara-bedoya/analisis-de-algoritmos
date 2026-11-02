@@ -1,54 +1,71 @@
+"""Radix Sort LSD estable sobre tuplas (frecuencia, término).
 
+Complejidad (n = términos, d = dígitos decimales de la frecuencia máxima):
+    - Tiempo: O(d · (n + b)) con base b = 10. Cada pasada es un counting
+      sort por un dígito.
+    - Espacio: O(n + b) por pasada (salida + cubetas 0..9).
+La clave numérica es la frecuencia; el término viaja pegado a ella.
 """
-Implementación de Radix Sort para enteros no negativos.
 
-Ordena los números por sus dígitos, comenzando
-por las unidades, luego las decenas y así sucesivamente.
-"""
+from __future__ import annotations
+
+from src.sorting.tipos import TerminoFrecuencia, validar_terminos
 
 
-def ordenar_por_digito(datos, exponente):
-    """Ordena establemente según un dígito decimal."""
+def ordenar_por_digito(
+    datos: list[TerminoFrecuencia],
+    exponente: int,
+) -> list[TerminoFrecuencia]:
+    """Counting sort estable según el dígito ``(frecuencia // exponente) % 10``.
 
+    Args:
+        datos: Tuplas a reordenar.
+        exponente: 1 = unidades, 10 = decenas, 100 = centenas, etc.
+
+    Returns:
+        Nueva lista estable respecto al dígito actual.
+    """
     cantidad = len(datos)
-    resultado = [0] * cantidad
-    conteo = [0] * 10
+    resultado: list[TerminoFrecuencia | None] = [None] * cantidad
+    conteo = [0] * 10  # base decimal: O(b) = O(1) aquí.
 
-    # Contamos las apariciones de cada dígito.
-    for numero in datos:
-        digito = (numero // exponente) % 10
+    # O(n): cuenta apariciones del dígito.
+    for frecuencia, _palabra in datos:
+        digito = (frecuencia // exponente) % 10
         conteo[digito] += 1
 
-    # Calculamos las posiciones acumuladas.
-    for i in range(1, 10):
-        conteo[i] += conteo[i - 1]
+    # O(b): posiciones acumuladas.
+    for indice in range(1, 10):
+        conteo[indice] += conteo[indice - 1]
 
-    # Colocamos los números de derecha a izquierda
-    # para conservar la estabilidad del ordenamiento.
-    for i in range(cantidad - 1, -1, -1):
-        numero = datos[i]
-        digito = (numero // exponente) % 10
-        resultado[conteo[digito] - 1] = numero
+    # O(n): coloca la tupla completa, de derecha a izquierda (estabilidad).
+    for item in reversed(datos):
+        digito = (item[0] // exponente) % 10
+        resultado[conteo[digito] - 1] = item
         conteo[digito] -= 1
 
-    return resultado
+    return [item for item in resultado if item is not None]
 
 
-def radix_sort(datos):
-    """Devuelve una nueva lista ordenada con Radix Sort."""
+def radix_sort(datos: list[TerminoFrecuencia]) -> list[TerminoFrecuencia]:
+    """Ordena las tuplas por frecuencia con Radix Sort LSD.
 
+    Args:
+        datos: Lista de tuplas ``(frecuencia, término)``.
+
+    Returns:
+        Nueva lista ordenada de menor a mayor frecuencia.
+    """
     if not datos:
         return []
 
-    if any(numero < 0 for numero in datos):
-        raise ValueError(
-            "Radix Sort requiere enteros no negativos."
-        )
+    validar_terminos(datos)
 
-    resultado = datos.copy()
-    maximo = max(resultado)
+    resultado = list(datos)
+    maximo = max(item[0] for item in resultado)
     exponente = 1
 
+    # d pasadas: mientras queden dígitos en k_max. Tiempo O(d (n + 10)).
     while maximo // exponente > 0:
         resultado = ordenar_por_digito(resultado, exponente)
         exponente *= 10
