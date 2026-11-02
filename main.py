@@ -1,4 +1,4 @@
-"""Punto de entrada de la aplicación del proyecto."""
+"""Punto de entrada unificado de la aplicación del proyecto."""
 
 import sys
 
@@ -15,5 +15,9 @@ if __name__ == "__main__":
         from src.searching.cli import main as ejecutar_busqueda
 
         ejecutar_busqueda(argumentos[1:])
+    elif argumentos and argumentos[0] in ("top15", "sorting", "ordenamiento"):
+        from src.sorting.top_15_algoritmos import main as ejecutar_top15
+
+        ejecutar_top15()
     else:
         ejecutar_similitud(argumentos)

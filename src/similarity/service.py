@@ -1,4 +1,4 @@
-"""Orquesta los seis enfoques para todas las parejas seleccionadas."""
+"""Orquesta los seis enfoques de similitud para todas las parejas seleccionadas."""
 
 from itertools import combinations
 
@@ -7,7 +7,7 @@ from src.similarity.embeddings import cobertura_vocabulario, similitud_embedding
 
 
 def comparar_articulos(articulos, identificadores, glove=None, fasttext=None):
-    """Compara todos los pares de IDs usando métodos disponibles."""
+    """Compara todos los pares de IDs usando métodos disponibles y cruce de metadatos."""
     identificadores = list(dict.fromkeys(identificadores))
     if len(identificadores) < 2:
         raise ValueError("Selecciona al menos dos artículos.")
@@ -53,7 +53,11 @@ def comparar_articulos(articulos, identificadores, glove=None, fasttext=None):
 
         resultados.append({
             "id_a": id_a,
+            "titulo_a": articulo_a.get("titulo", ""),
+            "autores_a": articulo_a.get("autores", ""),
             "id_b": id_b,
+            "titulo_b": articulo_b.get("titulo", ""),
+            "autores_b": articulo_b.get("autores", ""),
             "medidas": medidas,
             "coberturas": coberturas,
         })

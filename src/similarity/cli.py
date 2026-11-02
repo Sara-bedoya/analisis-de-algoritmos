@@ -67,12 +67,14 @@ def main(argv=None):
     except (FileNotFoundError, OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
 
-    print("Comparación de similitud textual")
+    print("Comparación de similitud textual y cruce de información:")
     for resultado in resultados:
         articulo_a = articulos[resultado["id_a"]]
         articulo_b = articulos[resultado["id_b"]]
         print(f"\nArtículo {resultado['id_a']}: {articulo_a['titulo']}")
+        print(f"  Autores: {articulo_a.get('autores', '')}")
         print(f"Artículo {resultado['id_b']}: {articulo_b['titulo']}")
+        print(f"  Autores: {articulo_b.get('autores', '')}")
         for nombre, valor in resultado["medidas"].items():
             texto_valor = "sin vocabulario común" if valor is None else f"{valor:.6f}"
             print(f"  {nombre}: {texto_valor}")
@@ -94,13 +96,26 @@ def _guardar_csv(ruta, resultados):
     with ruta.open("w", encoding="utf-8-sig", newline="") as archivo:
         escritor = csv.DictWriter(
             archivo,
-            fieldnames=["id_a", "id_b", *nombres_medidas, *nombres_cobertura],
+            fieldnames=[
+                "id_a",
+                "titulo_a",
+                "autores_a",
+                "id_b",
+                "titulo_b",
+                "autores_b",
+                *nombres_medidas,
+                *nombres_cobertura,
+            ],
         )
         escritor.writeheader()
         for resultado in resultados:
             escritor.writerow({
                 "id_a": resultado["id_a"],
+                "titulo_a": resultado.get("titulo_a", ""),
+                "autores_a": resultado.get("autores_a", ""),
                 "id_b": resultado["id_b"],
+                "titulo_b": resultado.get("titulo_b", ""),
+                "autores_b": resultado.get("autores_b", ""),
                 **resultado["medidas"],
                 **resultado["coberturas"],
             })

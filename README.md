@@ -66,6 +66,17 @@ Las posiciones y las medianas de siete mediciones separadas de
 preprocesamiento/búsqueda se guardan en `output/searching/`. La implementación y el caso de estudio están
 documentados en `docs/busqueda_cadenas.md`.
 
+## Top 15 de palabras (ordenamiento)
+
+Counting Sort, Radix Sort y Bucket Sort se ejecutan sobre las tuplas
+`(frecuencia, palabra)` y muestran el Top 15 desde el mismo punto de entrada:
+
+```powershell
+python main.py top15
+```
+
+También acepta `python main.py sorting` y `python main.py ordenamiento`.
+
 ## Diseño y entrega
 
 La matriz de cumplimiento está en `docs/revision_cumplimiento.md`; arquitectura
@@ -85,5 +96,5 @@ python -m streamlit run app.py
 
 La guía de publicación en Streamlit Community Cloud y sus límites está en
 [`docs/despliegue_streamlit.md`](docs/despliegue_streamlit.md). La app ofrece
-similitud, clustering y búsqueda; los embeddings se activan solo cuando sus
+similitud, clustering, búsqueda y Top 15; los embeddings se activan solo cuando sus
 archivos locales están presentes.

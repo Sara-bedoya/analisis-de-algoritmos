@@ -59,5 +59,6 @@ python main.py --ids 1 2 --glove data/models/glove-wiki-gigaword-50.gz --fasttex
 ```
 
 Se requieren al menos dos IDs válidos. Con `--salida`, la tabla completa de
-parejas, medidas y cobertura de vocabulario se escribe en CSV. Sin rutas a los
+parejas incluye el cruce de metadatos (`titulo_a`, `autores_a`, `titulo_b`,
+`autores_b`), las medidas y la cobertura de vocabulario. Sin rutas a los
 modelos se ejecutan solo las cuatro medidas clásicas.

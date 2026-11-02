@@ -318,9 +318,11 @@ def _render_similitud(articulos: dict[int, dict[str, str]]) -> None:
 
                     filas.append({
                         "ID A": id_a,
-                        "Artículo A": articulos[id_a]["titulo"],
+                        "Artículo A": resultado.get("titulo_a", articulos[id_a]["titulo"]),
+                        "Autores A": resultado.get("autores_a", articulos[id_a].get("autores", "")),
                         "ID B": id_b,
-                        "Artículo B": articulos[id_b]["titulo"],
+                        "Artículo B": resultado.get("titulo_b", articulos[id_b]["titulo"]),
+                        "Autores B": resultado.get("autores_b", articulos[id_b].get("autores", "")),
                         **medidas_finales,
                         **coberturas_finales,
                     })
