@@ -71,6 +71,8 @@ st.markdown(
       }
       [data-testid="stSidebar"] * { color: #F7F5FF; }
       [data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #BEB5FF; }
+      [data-testid="stSidebar"] [data-testid="stMetricLabel"],
+      [data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #111827 !important; }
       .block-container { max-width: 1420px; padding-top: 2.4rem; }
       .hero {
         position: relative; overflow: hidden; padding: 2rem 2.2rem;
