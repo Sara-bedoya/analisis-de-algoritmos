@@ -1,4 +1,4 @@
-﻿"""Interfaz web Streamlit para los requerimientos 1, 2, 3 y el Top 15."""
+"""Interfaz web Streamlit para los requerimientos 1, 2, 3 y el Top 15."""
 
 from __future__ import annotations
 
@@ -68,11 +68,79 @@ st.markdown(
       [data-testid="stHeader"] { background: transparent; }
       [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #272344 0%, #342F5D 100%);
+        color: #F7F5FF;
       }
-      [data-testid="stSidebar"] * { color: #F7F5FF; }
-      [data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #BEB5FF; }
+      [data-testid="stSidebar"] h1,
+      [data-testid="stSidebar"] h2,
+      [data-testid="stSidebar"] h3,
+      [data-testid="stSidebar"] h4,
+      [data-testid="stSidebar"] p,
+      [data-testid="stSidebar"] label,
+      [data-testid="stSidebar"] caption,
+      [data-testid="stSidebar"] .stMarkdown {
+        color: #F7F5FF;
+      }
+
+      /* Tarjeta blanca de métrica en la barra lateral con texto negro nítido */
+      [data-testid="stSidebar"] [data-testid="stMetric"] {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 16px !important;
+        padding: 1rem 1.15rem !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+      }
+      [data-testid="stSidebar"] [data-testid="stMetric"] * {
+        color: #111827 !important;
+      }
       [data-testid="stSidebar"] [data-testid="stMetricLabel"],
-      [data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #111827 !important; }
+      [data-testid="stSidebar"] [data-testid="stMetricLabel"] *,
+      [data-testid="stSidebar"] [data-testid="stMetricLabel"] p,
+      [data-testid="stSidebar"] [data-testid="stMetricLabel"] label,
+      [data-testid="stSidebar"] [data-testid="stMetricLabel"] span {
+        color: #1F2937 !important;
+        font-weight: 700 !important;
+        font-size: 0.82rem !important;
+        letter-spacing: 0.03em !important;
+        text-transform: uppercase !important;
+      }
+      [data-testid="stSidebar"] [data-testid="stMetricValue"],
+      [data-testid="stSidebar"] [data-testid="stMetricValue"] *,
+      [data-testid="stSidebar"] [data-testid="stMetricValue"] div,
+      [data-testid="stSidebar"] [data-testid="stMetricValue"] span {
+        color: #000000 !important;
+        font-weight: 900 !important;
+        font-size: 2.2rem !important;
+        line-height: 1.1 !important;
+      }
+      [data-testid="stSidebar"] [data-testid="stMetric"] svg {
+        fill: #374151 !important;
+        color: #374151 !important;
+      }
+
+      /* Selectbox en la barra lateral con texto oscuro y fondo nítido */
+      [data-testid="stSidebar"] div[data-baseweb="select"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 12px !important;
+      }
+      [data-testid="stSidebar"] div[data-baseweb="select"] * {
+        color: #0F172A !important;
+        font-weight: 500 !important;
+      }
+      [data-testid="stSidebar"] div[data-baseweb="select"] svg {
+        fill: #475569 !important;
+      }
+      div[data-baseweb="popover"] ul,
+      div[data-baseweb="popover"] li,
+      div[data-baseweb="popover"] * {
+        color: #0F172A !important;
+        background-color: #FFFFFF !important;
+      }
+      div[data-baseweb="popover"] li:hover,
+      div[data-baseweb="popover"] li[aria-selected="true"] {
+        background-color: #F1F5F9 !important;
+        color: #6656D9 !important;
+      }
       .block-container { max-width: 1420px; padding-top: 2.4rem; }
       .hero {
         position: relative; overflow: hidden; padding: 2rem 2.2rem;
@@ -632,7 +700,7 @@ def main() -> None:
         st.stop()
 
     st.sidebar.markdown("### Explorar el corpus")
-    st.sidebar.metric("Artículos científicos", len(articulos), help="Corpus documental de la asignatura")
+    st.sidebar.metric("Artículos del proyecto", len(articulos), help="20 artículos científicos en PDF analizados en el proyecto")
     articulo_sidebar = st.sidebar.selectbox(
         "Vista rápida de un artículo",
         options=sorted(articulos),

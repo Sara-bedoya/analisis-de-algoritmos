@@ -1,4 +1,4 @@
 ﻿algoritmo,tiempo_preparacion_ms,tiempo_busqueda_ms,repeticiones,comparaciones_caracteres,colisiones_hash
-KMP,0.003300003,2.735900001,7,28475,0
-Boyer-Moore,0.002300003,3.213500000,7,14487,0
-Rabin-Karp,0.006000002,6.204900004,7,286,0
+KMP,0.001583000,3.524958000,1,28475,0
+Boyer-Moore,0.000875000,4.921417000,1,14487,0
+Rabin-Karp,0.005042000,7.426084000,1,286,0
